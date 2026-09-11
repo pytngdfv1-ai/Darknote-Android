@@ -1,0 +1,72 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configurar Java (requerido por Android Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar NDK
+        run: sdkmanager --install "ndk;27.0.12077973"
+
+      - name: Configurar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Agregar targets de Rust para Android
+        run: |
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          rustup target add i686-linux-android
+          rustup target add x86_64-linux-android
+
+      - name: Cache de Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Instalar dependencias de Node
+        run: npm install
+
+      - name: Instalar Tauri CLI
+        run: npm install -g @tauri-apps/cli
+
+      - name: Variables de entorno de Android/NDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: Inicializar proyecto Android de Tauri
+        run: tauri android init
+
+      - name: Compilar APK (debug)
+        run: tauri android build --apk --debug
+
+      - name: Ubicar el APK generado
+        run: find src-tauri/gen/android -name "*.apk"
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: darknote-android-apk
+          path: src-tauri/gen/android/**/*.apk
