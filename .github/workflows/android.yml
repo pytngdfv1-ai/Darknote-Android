@@ -48,8 +48,8 @@ jobs:
       - name: Instalar dependencias de Node
         run: npm install
 
-      - name: Instalar Tauri CLI
-        run: npm install -g @tauri-apps/cli
+      - name: Instalar Tauri CLI (local, no global)
+        run: npm install --no-save @tauri-apps/cli@latest
 
       - name: Variables de entorno de Android/NDK
         run: |
@@ -57,10 +57,10 @@ jobs:
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> $GITHUB_ENV
 
       - name: Inicializar proyecto Android de Tauri
-        run: tauri android init
+        run: npx tauri android init
 
       - name: Compilar APK (debug)
-        run: tauri android build --apk --debug
+        run: npx tauri android build --apk --debug
 
       - name: Ubicar el APK generado
         run: find src-tauri/gen/android -name "*.apk"
