@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DarkNote</title>
+<style>
+  :root{
+    --bg-1:#1e1e1e;
+    --bg-2:#252526;
+    --bg-3:#2d2d30;
+    --border:#3c3c3c;
+    --text:#d4d4d4;
+    --text-dim:#9d9d9d;
+    --accent:#0078d4;
+    --line-highlight: rgba(255,255,255,.06);
+    --tok-comment:#6a9955;
+    --tok-string:#ce9178;
+    --tok-number:#b5cea8;
+    --tok-keyword:#569cd6;
+    --tok-tag:#569cd6;
+    --tok-attr:#9cdcfe;
+    --tok-punct:#d4d4d4;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%;
+    margin:0;
+    padding:0;
+    background:var(--bg-1);
+    color:var(--text);
+    font-family:'Segoe UI',Consolas,'Courier New',monospace;
+    overflow:hidden;
+    user-select:none;
+  }
+  #app{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    width:100vw;
+  }
+
+  /* ===== MENU BAR ===== */
+  #menubar{
+    display:flex;
+    align-items:center;
+    background:var(--bg-2);
+    border-bottom:1px solid var(--border);
+    height:34px;
+    flex-shrink:0;
+    padding:0 6px;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  .menu{ position:relative; flex-shrink:0; }
+  .menu-btn{
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-size:13px;
+    padding:7px 12px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .menu-btn:hover, .menu.open .menu-btn{ background:var(--bg-3); }
+  .menu-dropdown{
+    display:none;
+    position:fixed;
+    top:34px;
+    left:0;
+    min-width:230px;
+    background:var(--bg-2);
+    border:1px solid var(--border);
+    box-shadow:0 4px 10px rgba(0,0,0,.5);
+    z-index:200;
+    padding:4px 0;
+  }
+  .menu.open .menu-dropdown{ display:block; }
+  .menu-item{
+    display:flex;
+    justify-content:space-between;
+    gap:20px;
+    padding:6px 16px;
+    font-size:13px;
+    cursor:pointer;
+    color:var(--text);
+  }
+  .menu-item:hover{ background:var(--accent); color:#fff; }
+  .menu-item .shortcut{ color:var(--text-dim); font-size:12px; }
+  .menu-item:hover .shortcut{ color:#dbeeff; }
+  .menu-sep{ height:1px; background:var(--border); margin:4px 0; }
+  .menu-item.checked::before{ content:"✓ "; }
+
+  /* ===== TAB BAR ===== */
+  #tabbar{
+    display:flex;
+    align-items:stretch;
+    background:var(--bg-2);
+    border-bottom:1px solid var(--border);
+    height:32px;
+    flex-shrink:0;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  .tab{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 10px;
+    font-size:12px;
+    color:var(--text-dim);
+    background:var(--bg-2);
+    border-right:1px solid var(--border);
+    cursor:pointer;
+    flex-shrink:0;
+    max-width:220px;
+  }
+  .tab.active{ background:var(--bg-1); color:var(--text); }
+  .tab-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tab-dot{ width:6px; height:6px; border-radius:50%; background:var(--accent); flex-shrink:0; display:none; }
+  .tab.dirty .tab-dot{ display:block; }
+  .tab-close{
+    width:16px; height:16px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:3px;
+    flex-shrink:0;
+    font-size:13px;
+    line-height:1;
+  }
+  .tab-close:hover{ background:var(--bg-3); color:#fff; }
+  .tab-new{
+    flex-shrink:0;
+    width:32px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-dim);
+    cursor:pointer;
+    font-size:16px;
+  }
+  .tab-new:hover{ background:var(--bg-3); color:#fff; }
+
+  /* ===== EDITOR AREA ===== */
+  #editor-area{ flex:1; display:flex; min-height:0; min-width:0; }
+  #edit-pane{
+    display:flex;
+    flex:1;
+    min-width:0;
+    min-height:0;
+    position:relative;
+    background:var(--bg-1);
+  }
+  #line-numbers{
+    position:relative;
+    background:var(--bg-2);
+    color:var(--text-dim);
+    text-align:right;
+    padding:8px 8px 8px 0;
+    font-family:Consolas,'Courier New',monospace;
+    font-size:14px;
+    line-height:1.5;
+    overflow:hidden;
+    user-select:none;
+    border-right:1px solid var(--border);
+    white-space:pre;
+    flex-shrink:0;
+    min-width:44px;
+  }
+  #line-numbers.hidden{ display:none; }
+
+  #editor-stack{
+    position:relative;
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+  }
+  #current-line-highlight{
+    position:absolute;
+    left:0; right:0;
+    height:21px;
+    background:var(--line-highlight);
+    pointer-events:none;
+    z-index:1;
+  }
+  #highlight-layer, #editor{
+    position:absolute;
+    inset:0;
+    margin:0;
+    padding:8px 12px;
+    font-family:Consolas,'Courier New',monospace;
+    font-size:14px;
+    line-height:1.5;
+    tab-size:4;
+    -moz-tab-size:4;
+    white-space:pre;
+    overflow:auto;
+    border:none;
+  }
+  #highlight-layer{
+    z-index:2;
+    color:var(--text);
+    pointer-events:none;
+    word-wrap:normal;
+    overflow-wrap:normal;
+  }
+  #highlight-layer code{ font:inherit; }
+  #editor{
+    z-index:3;
+    background:transparent;
+    color:transparent;
+    caret-color:var(--text);
+    outline:none;
+    resize:none;
+  }
+  #editor.wrap, #highlight-layer.wrap{ white-space:pre-wrap; word-break:break-word; }
+  #editor::selection{ background:rgba(0,120,212,.4); color:transparent; }
+
+  .tok-comment{ color:var(--tok-comment); font-style:italic; }
+  .tok-string{ color:var(--tok-string); }
+  .tok-number{ color:var(--tok-number); }
+  .tok-keyword{ color:var(--tok-keyword); }
+  .tok-tag{ color:var(--tok-tag); }
+  .tok-attr{ color:var(--tok-attr); }
+  .tok-punct{ color:var(--tok-punct); }
+  .tok-md{ color:var(--tok-keyword); font-weight:600; }
+
+  /* ===== MINIMAP ===== */
+  #minimap{
+    width:80px;
+    flex-shrink:0;
+    background:var(--bg-2);
+    border-left:1px solid var(--border);
+    cursor:pointer;
+    display:block;
+  }
+  #minimap.hidden{ display:none; }
+
+  #preview-pane{
+    display:none;
+    flex-direction:column;
+    flex:1;
+    min-width:0;
+    border-left:2px solid var(--border);
+    background:#fff;
+  }
+  #preview-pane.active{ display:flex; }
+  #preview-bar{
+    background:var(--bg-2);
+    color:var(--text-dim);
+    font-size:12px;
+    padding:4px 10px;
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  #preview-frame{ flex:1; border:none; width:100%; background:#fff; }
+
+  /* ===== STATUS BAR ===== */
+  #statusbar{
+    display:flex;
+    align-items:center;
+    background:var(--accent);
+    color:#fff;
+    font-size:12px;
+    height:24px;
+    flex-shrink:0;
+    padding:0 10px;
+    gap:16px;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+  #statusbar span{ flex-shrink:0; }
+  #status-message{ margin-left:auto; opacity:.95; font-style:italic; }
+
+  /* ===== DIALOGS ===== */
+  .overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    z-index:500;
+    align-items:flex-start;
+    justify-content:center;
+  }
+  .overlay.active{ display:flex; }
+  .dialog{
+    margin-top:80px;
+    background:var(--bg-2);
+    border:1px solid var(--border);
+    box-shadow:0 8px 24px rgba(0,0,0,.6);
+    width:400px;
+    max-width:92vw;
+    padding:16px;
+    border-radius:4px;
+    user-select:text;
+  }
+  .dialog h3{ margin:0 0 12px 0; font-size:14px; color:var(--text); font-weight:600; }
+  .dialog label{ display:block; font-size:12px; color:var(--text-dim); margin:8px 0 4px; }
+  .dialog input[type=text]{
+    width:100%;
+    background:var(--bg-1);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:6px 8px;
+    font-size:13px;
+    border-radius:2px;
+    outline:none;
+  }
+  .dialog input[type=text]:focus{ border-color:var(--accent); }
+  .checkbox-row{ display:flex; align-items:center; gap:6px; margin-top:10px; font-size:12px; color:var(--text-dim); }
+  .dialog-buttons{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .dlg-btn{
+    background:var(--bg-3);
+    color:var(--text);
+    border:1px solid var(--border);
+    padding:6px 12px;
+    font-size:12px;
+    cursor:pointer;
+    border-radius:2px;
+  }
+  .dlg-btn:hover{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .dlg-btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .about-body{ font-size:13px; color:var(--text-dim); line-height:1.7; }
+  .about-body b{ color:var(--text); }
+
+  ::-webkit-scrollbar{ width:12px; height:12px; }
+  ::-webkit-scrollbar-track{ background:var(--bg-2); }
+  ::-webkit-scrollbar-thumb{ background:var(--bg-3); border:2px solid var(--bg-2); border-radius:6px; }
+  ::-webkit-scrollbar-thumb:hover{ background:#4a4a4d; }
+
+  /* ===== IMPRESIÓN / EXPORTAR A PDF ===== */
+  #print-area{ display:none; }
+  @media print{
+    #menubar, #tabbar, #statusbar, #line-numbers, #minimap,
+    #highlight-layer, #editor, #current-line-highlight, .overlay{
+      display:none !important;
+    }
+    #editor-area, #edit-pane, #editor-stack{ display:block !important; position:static !important; overflow:visible !important; }
+    #print-area{
+      display:block !important;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-family:Consolas,'Courier New',monospace;
+      font-size:11pt;
+      line-height:1.4;
+      color:#000;
+    }
+    html,body{ overflow:visible !important; background:#fff !important; }
+  }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 900px){
+    #editor-area.preview-active{ flex-direction:column; }
+    #editor-area.preview-active #edit-pane,
+    #editor-area.preview-active #preview-pane{ flex:1 1 50%; min-height:0; }
+    #preview-pane{ border-left:none; border-top:2px solid var(--border); }
+    #minimap{ width:50px; }
+  }
+  @media (max-width: 600px){
+    #line-numbers{ display:none; }
+    #minimap{ display:none; }
+    .menu-dropdown{ min-width:190px; }
+    #statusbar{ font-size:11px; gap:10px; }
+  }
+  /* ===== AUTOCOMPLETADO ===== */
+  #autocomplete-box{
+    display:none;
+    position:fixed;
+    z-index:300;
+    background:var(--bg-2);
+    border:1px solid var(--border);
+    box-shadow:0 4px 10px rgba(0,0,0,.5);
+    min-width:160px;
+    max-height:160px;
+    overflow-y:auto;
+  }
+  #autocomplete-box.active{ display:block; }
+  .ac-item{ padding:5px 10px; font-size:13px; color:var(--text); cursor:pointer; }
+  .ac-item.selected, .ac-item:hover{ background:var(--accent); color:#fff; }
+
+  /* ===== RESALTADO DE COINCIDENCIAS DE PALABRA ===== */
+  .word-match-highlight{
+    position:absolute;
+    border:1px solid rgba(255,255,255,.35);
+    background:rgba(255,255,255,.08);
+    pointer-events:none;
+    z-index:1;
+    box-sizing:border-box;
+  }
+
+  /* ===== MODO SOLO LECTURA ===== */
+  #editor.readonly{ opacity:.85; }
+  #readonly-badge{
+    display:none;
+    background:#8a6d00;
+    color:#fff;
+    font-size:11px;
+    padding:1px 8px;
+    border-radius:3px;
+    margin-right:8px;
+  }
+  #readonly-badge.active{ display:inline-block; }
+
+  /* ===== BANNER DE ARCHIVO MODIFICADO EXTERNAMENTE ===== */
+  #external-change-banner{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background:#8a6d00;
+    color:#fff;
+    font-size:12px;
+    padding:6px 12px;
+    flex-shrink:0;
+  }
+  #external-change-banner.active{ display:flex; }
+  #external-change-banner button{
+    background:rgba(255,255,255,.15);
+    border:1px solid rgba(255,255,255,.4);
+    color:#fff;
+    padding:3px 10px;
+    font-size:11px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  #external-change-banner button:hover{ background:rgba(255,255,255,.3); }
+
+  /* ===== PANEL DE TERMINAL ===== */
+  #terminal-panel{
+    display:none;
+    flex-direction:column;
+    height:220px;
+    flex-shrink:0;
+    background:#0c0c0c;
+    border-top:1px solid var(--border);
+  }
+  #terminal-panel.active{ display:flex; }
+  #terminal-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--bg-2);
+    padding:4px 10px;
+    font-size:12px;
+    color:var(--text-dim);
+    flex-shrink:0;
+  }
+  #terminal-header button{
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    cursor:pointer;
+    font-size:14px;
+  }
+  #terminal-header button:hover{ color:#fff; }
+  #terminal-output{
+    flex:1;
+    overflow-y:auto;
+    padding:8px 10px;
+    font-family:Consolas,'Courier New',monospace;
+    font-size:12px;
+    color:#d4d4d4;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  #terminal-input-row{
+    display:flex;
+    align-items:center;
+    border-top:1px solid var(--border);
+    padding:4px 8px;
+    flex-shrink:0;
+  }
+  #terminal-prompt{ color:#4ec9b0; font-family:Consolas,monospace; font-size:12px; margin-right:6px; }
+  #terminal-input{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:#d4d4d4;
+    font-family:Consolas,'Courier New',monospace;
+    font-size:12px;
+  }  /* ===== ANDROID / TÁCTIL ===== */
+  html.is-touch .menu-btn{ padding:10px 14px; font-size:14px; }
+  html.is-touch .menu-item{ padding:12px 16px; font-size:14px; }
+  html.is-touch .tab{ padding:0 14px; }
+  html.is-touch .tab-close{ width:24px; height:24px; font-size:16px; }
+  html.is-touch .dlg-btn{ padding:10px 16px; font-size:14px; }
+  html.is-android .shortcut{ display:none; }
+  html.is-android #terminal-panel,
+  html.is-android [data-action="toggleterminal"],
+  html.is-android [data-action="runfile"]{ display:none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== MENU BAR ===== -->
+  <div id="menubar">
+    <div class="menu" data-menu="archivo">
+      <button class="menu-btn">Archivo</button>
+      <div class="menu-dropdown">
+        <div class="menu-item" data-action="new"><span>Nuevo</span><span class="shortcut">Ctrl+N</span></div>
+        <div class="menu-item" data-action="open"><span>Abrir</span><span class="shortcut">Ctrl+O</span></div>
+        <div class="menu-item" data-action="save"><span>Guardar</span><span class="shortcut">Ctrl+S</span></div>
+        <div class="menu-item" data-action="saveas"><span>Guardar como</span><span class="shortcut">Ctrl+Shift+S</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="closetab"><span>Cerrar pestaña</span><span class="shortcut">Ctrl+W</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="exportpdf"><span>Exportar a PDF</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="readonly"><span>Modo solo lectura</span></div>
+      </div>
+    </div>
+
+    <div class="menu" data-menu="edicion">
+      <button class="menu-btn">Edición</button>
+      <div class="menu-dropdown">
+        <div class="menu-item" data-action="undo"><span>Deshacer</span><span class="shortcut">Ctrl+Z</span></div>
+        <div class="menu-item" data-action="redo"><span>Rehacer</span><span class="shortcut">Ctrl+Y</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="find"><span>Buscar</span><span class="shortcut">Ctrl+F</span></div>
+        <div class="menu-item" data-action="replace"><span>Reemplazar</span><span class="shortcut">Ctrl+H</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="selectall"><span>Seleccionar todo</span><span class="shortcut">Ctrl+A</span></div>
+        <div class="menu-item" data-action="goto"><span>Ir a línea</span><span class="shortcut">Ctrl+G</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="autoclose"><span>Autocerrar símbolos</span></div>
+        <div class="menu-item" data-action="autocomplete"><span>Autocompletado de palabras</span></div>
+        <div class="menu-item" data-action="wordhighlight"><span>Resaltar coincidencias</span></div>
+      </div>
+    </div>
+
+    <div class="menu" data-menu="ver">
+      <button class="menu-btn">Ver</button>
+      <div class="menu-dropdown">
+        <div class="menu-item" data-action="wordwrap"><span>Ajuste de línea</span></div>
+        <div class="menu-item" data-action="linenumbers"><span>Números de línea</span></div>
+        <div class="menu-item" data-action="minimap"><span>Minimapa</span></div>
+        <div class="menu-item" data-action="currentline"><span>Resaltar línea actual</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="zoomin"><span>Aumentar zoom</span><span class="shortcut">Ctrl++</span></div>
+        <div class="menu-item" data-action="zoomout"><span>Reducir zoom</span><span class="shortcut">Ctrl+-</span></div>
+        <div class="menu-item" data-action="zoomreset"><span>Restablecer zoom</span><span class="shortcut">Ctrl+0</span></div>
+      </div>
+    </div>
+
+    <div class="menu" data-menu="herramientas">
+      <button class="menu-btn">Herramientas</button>
+      <div class="menu-dropdown">
+        <div class="menu-item" data-action="togglepreview"><span>Vista previa en vivo</span></div>
+        <div class="menu-item" data-action="refreshpreview"><span>Actualizar vista previa</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="toggleterminal"><span>Terminal</span><span class="shortcut">Ctrl+ñ</span></div>
+        <div class="menu-item" data-action="runfile"><span>Ejecutar</span><span class="shortcut">F5</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="lint"><span>Revisar sintaxis</span></div>
+      </div>
+    </div>
+
+    <div class="menu" data-menu="ayuda">
+      <button class="menu-btn">Ayuda</button>
+      <div class="menu-dropdown">
+        <div class="menu-item" data-action="about"><span>Acerca de DarkNote</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB BAR ===== -->
+  <div id="tabbar"></div>
+
+  <!-- ===== EDITOR AREA ===== -->
+  <div id="editor-area">
+    <div id="edit-pane">
+      <div id="line-numbers">1</div>
+      <div id="editor-stack">
+        <div id="current-line-highlight"></div>
+        <pre id="highlight-layer"><code id="highlight-code"></code></pre>
+        <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Comienza a escribir..."></textarea>
+      </div>
+      <canvas id="minimap" width="80" height="600"></canvas>
+    </div>
+    <div id="preview-pane">
+      <div id="preview-bar">Vista previa en vivo</div>
+      <iframe id="preview-frame" sandbox="allow-scripts"></iframe>
+    </div>
+  </div>
+
+  <!-- ===== BANNER DE ARCHIVO MODIFICADO EXTERNAMENTE ===== -->
+  <div id="external-change-banner">
+    <span id="external-change-text">El archivo cambió fuera de DarkNote.</span>
+    <div>
+      <button id="btn-reload-file">Recargar desde disco</button>
+      <button id="btn-ignore-change">Ignorar</button>
+    </div>
+  </div>
+
+  <!-- ===== STATUS BAR ===== -->
+  <div id="statusbar">
+    <span id="readonly-badge">SOLO LECTURA</span>
+    <span id="status-position">Ln 1, Col 1</span>
+    <span id="status-lines">Líneas: 1</span>
+    <span id="status-chars">Caracteres: 0</span>
+    <span id="status-wrap">Ajuste: No</span>
+    <span id="status-zoom">Zoom: 100%</span>
+    <span id="status-encoding">UTF-8</span>
+    <span id="status-message"></span>
+  </div>
+
+  <!-- ===== PANEL DE TERMINAL ===== -->
+  <div id="terminal-panel">
+    <div id="terminal-header">
+      <span>Terminal</span>
+      <button id="btn-close-terminal">×</button>
+    </div>
+    <div id="terminal-output"></div>
+    <div id="terminal-input-row">
+      <span id="terminal-prompt">&gt;</span>
+      <input type="text" id="terminal-input" placeholder="Escribe un comando y presiona Enter...">
+    </div>
+  </div>
+</div>
+
+<div id="autocomplete-box"></div>
+
+<pre id="print-area"></pre>
+
+<!-- ===== SEARCH / REPLACE DIALOG ===== -->
+<div class="overlay" id="search-overlay">
+  <div class="dialog">
+    <h3 id="search-title">Buscar</h3>
+    <label for="search-input">Buscar</label>
+    <input type="text" id="search-input" placeholder="Texto a buscar...">
+    <div id="replace-row" style="display:none;">
+      <label for="replace-input">Reemplazar con</label>
+      <input type="text" id="replace-input" placeholder="Texto de reemplazo...">
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="case-sensitive">
+      <label for="case-sensitive" style="margin:0;">Coincidir mayúsculas/minúsculas</label>
+    </div>
+    <div class="dialog-buttons">
+      <button class="dlg-btn" id="btn-find-prev">Anterior</button>
+      <button class="dlg-btn" id="btn-find-next">Siguiente</button>
+      <button class="dlg-btn" id="btn-replace">Reemplazar</button>
+      <button class="dlg-btn" id="btn-replace-all">Reemplazar todo</button>
+      <button class="dlg-btn primary" id="btn-search-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ABOUT DIALOG ===== -->
+<div class="overlay" id="about-overlay">
+  <div class="dialog">
+    <h3>Acerca de DarkNote</h3>
+    <div class="about-body">
+      <p><b>DarkNote</b> — Editor de texto ligero con tema oscuro.</p>
+      <p>Versión: 1.1.0</p>
+      <p>Motor: HTML5 + CSS3 + JavaScript vanilla</p>
+      <p>Empaquetado: Tauri v2</p>
+      <p>Formatos soportados: txt, html, css, js, json, md, py, java, cpp, c, ts, xml, yml, yaml</p>
+      <p>Funciona 100% sin conexión.</p>
+    </div>
+    <div class="dialog-buttons">
+      <button class="dlg-btn primary" id="btn-about-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" style="display:none" accept=".txt,.html,.css,.js,.json,.md,.py,.java,.cpp,.c,.ts,.xml,.yml,.yaml">
+
+<script>
+(function(){
+  "use strict";
+
+  const SUPPORTED_EXT = ["txt","html","css","js","json","md","py","java","cpp","c","ts","xml","yml","yaml"];
+  const LINE_HEIGHT_BASE = 21; // 14px * 1.5
+
+  /* ================= ESTADO GLOBAL (MULTI-PESTAÑAS) ================= */
+  let tabCounter = 0;
+  function makeTab(content, filePath, fileName){
+    tabCounter++;
+    return {
+      id: "tab" + tabCounter,
+      filePath: filePath || null,
+      fileName: fileName || "sin título",
+      content: content || "",
+      isDirty: false,
+      lastDiskContent: content || ""
+    };
+  }
+
+  const state = {
+    tabs: [ makeTab("", null, "sin título") ],
+    activeTabId: null,
+    zoom: 100,
+    wordWrap: false,
+    showLineNumbers: true,
+    showMinimap: true,
+    showCurrentLine: true,
+    autoClose: true,
+    autoComplete: true,
+    wordHighlight: true,
+    readOnly: false,
+    previewActive: false,
+    previewBlobUrl: null,
+    searchMode: "find"
+  };
+  state.activeTabId = state.tabs[0].id;
+
+  function getActiveTab(){
+    return state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
+  }
+
+  const editor = document.getElementById("editor");
+  const lineNumbers = document.getElementById("line-numbers");
+  const highlightLayer = document.getElementById("highlight-layer");
+  const highlightCode = document.getElementById("highlight-code");
+  const currentLineHighlight = document.getElementById("current-line-highlight");
+  const minimap = document.getElementById("minimap");
+  const minimapCtx = minimap.getContext("2d");
+  const editorArea = document.getElementById("editor-area");
+  const previewPane = document.getElementById("preview-pane");
+  const previewFrame = document.getElementById("preview-frame");
+  const tabbarEl = document.getElementById("tabbar");
+  const printArea = document.getElementById("print-area");
+
+  const statusPosition = document.getElementById("status-position");
+  const statusLines = document.getElementById("status-lines");
+  const statusChars = document.getElementById("status-chars");
+  const statusWrap = document.getElementById("status-wrap");
+  const statusZoom = document.getElementById("status-zoom");
+  const statusMessage = document.getElementById("status-message");
+
+  const searchOverlay = document.getElementById("search-overlay");
+  const searchInput = document.getElementById("search-input");
+  const replaceInput = document.getElementById("replace-input");
+  const replaceRow = document.getElementById("replace-row");
+  const searchTitle = document.getElementById("search-title");
+  const caseSensitive = document.getElementById("case-sensitive");
+  const aboutOverlay = document.getElementById("about-overlay");
+  const fileInput = document.getElementById("file-input");
+  const autocompleteBox = document.getElementById("autocomplete-box");
+  const readonlyBadge = document.getElementById("readonly-badge");
+  const externalChangeBanner = document.getElementById("external-change-banner");
+  const externalChangeText = document.getElementById("external-change-text");
+  const terminalPanel = document.getElementById("terminal-panel");
+  const terminalOutput = document.getElementById("terminal-output");
+  const terminalInput = document.getElementById("terminal-input");
+
+  const isTauri = () => !!(window.__TAURI__);
+
+  function detectPlatform(){
+    try{
+      if(isTauri() && window.__TAURI__.core && typeof window.__TAURI__.core.platform === "function"){
+        return window.__TAURI__.core.platform();
+      }
+    }catch(err){ /* se ignora */ }
+    return null;
+  }
+  const PLATFORM = detectPlatform();
+  const isAndroid = PLATFORM === "android";
+  const isTouchDevice = isAndroid || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  document.documentElement.classList.toggle("is-android", isAndroid);
+  document.documentElement.classList.toggle("is-touch", isTouchDevice);
+
+  /* ================= UTILIDADES ================= */
+  let statusMsgTimer = null;
+  function flashMessage(msg, duration){
+    statusMessage.textContent = msg;
+    clearTimeout(statusMsgTimer);
+    statusMsgTimer = setTimeout(()=>{ statusMessage.textContent = ""; }, duration || 2500);
+  }
+
+  function getExtension(name){
+    return (name.split(".").pop() || "").toLowerCase();
+  }
+  function hasSupportedExtension(name){
+    return SUPPORTED_EXT.includes(getExtension(name));
+  }
+
+  function updateTitle(){
+    const tab = getActiveTab();
+    const dirtyMark = tab.isDirty ? "● " : "";
+    document.title = `${dirtyMark}${tab.fileName} - DarkNote`;
+  }
+
+  function markDirty(){
+    const tab = getActiveTab();
+    if(!tab.isDirty){
+      tab.isDirty = true;
+      updateTitle();
+      renderTabs();
+    }
+  }
+  function markClean(){
+    const tab = getActiveTab();
+    tab.isDirty = false;
+    updateTitle();
+    renderTabs();
+  }
+
+  /* ================= RESALTADO DE SINTAXIS ================= */
+  function escapeHtml(s){
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  const KEYWORDS = {
+    js: "break case catch class const continue debugger default delete do else export extends finally for function if import in instanceof let new return super switch this throw try typeof var void while yield async await static get set of null true false undefined NaN".split(" "),
+    py: "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False self".split(" "),
+    c: "auto break case char const continue default do double else enum extern float for goto if int long register return short signed sizeof static struct switch typedef union unsigned void volatile while class public private protected new delete this template namespace using virtual bool true false nullptr String".split(" ")
+  };
+
+  function langForExt(ext){
+    if(["html","htm","xml"].includes(ext)) return "html";
+    if(ext === "css") return "css";
+    if(["js","ts","json"].includes(ext)) return "js";
+    if(ext === "py") return "py";
+    if(["java","c","cpp"].includes(ext)) return "c";
+    if(ext === "md") return "md";
+    if(["yml","yaml"].includes(ext)) return "yaml";
+    return "plain";
+  }
+
+  function highlightGeneric(code, keywords, lineComment, blockComment){
+    let out = "";
+    let i = 0;
+    const n = code.length;
+    const kwSet = new Set(keywords || []);
+    while(i < n){
+      const rest = code.slice(i);
+      if(blockComment && rest.startsWith(blockComment[0])){
+        const end = code.indexOf(blockComment[1], i + blockComment[0].length);
+        const stop = end === -1 ? n : end + blockComment[1].length;
+        out += '<span class="tok-comment">' + escapeHtml(code.slice(i, stop)) + '</span>';
+        i = stop; continue;
+      }
+      if(lineComment && rest.startsWith(lineComment)){
+        let end = code.indexOf("\n", i);
+        if(end === -1) end = n;
+        out += '<span class="tok-comment">' + escapeHtml(code.slice(i, end)) + '</span>';
+        i = end; continue;
+      }
+      const ch = code[i];
+      if(ch === '"' || ch === "'" || ch === "`"){
+        let j = i + 1;
+        while(j < n && code[j] !== ch){
+          if(code[j] === "\\") j++;
+          j++;
+        }
+        j = Math.min(j + 1, n);
+        out += '<span class="tok-string">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      if(/[0-9]/.test(ch)){
+        let j = i;
+        while(j < n && /[0-9.]/.test(code[j])) j++;
+        out += '<span class="tok-number">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      if(/[A-Za-z_$]/.test(ch)){
+        let j = i;
+        while(j < n && /[A-Za-z0-9_$]/.test(code[j])) j++;
+        const word = code.slice(i, j);
+        if(kwSet.has(word)){
+          out += '<span class="tok-keyword">' + escapeHtml(word) + '</span>';
+        } else {
+          out += escapeHtml(word);
+        }
+        i = j; continue;
+      }
+      out += escapeHtml(ch);
+      i++;
+    }
+    return out;
+  }
+
+  function highlightHtml(code){
+    let out = "";
+    let i = 0;
+    const n = code.length;
+    while(i < n){
+      if(code.startsWith("<!--", i)){
+        let end = code.indexOf("-->", i);
+        end = end === -1 ? n : end + 3;
+        out += '<span class="tok-comment">' + escapeHtml(code.slice(i, end)) + '</span>';
+        i = end; continue;
+      }
+      if(code[i] === "<"){
+        let end = code.indexOf(">", i);
+        end = end === -1 ? n : end + 1;
+        const tag = code.slice(i, end);
+        const tagged = tag.replace(/^(<\/?)([a-zA-Z0-9-]+)/, (m, p1, p2) =>
+          '<span class="tok-punct">' + escapeHtml(p1) + '</span><span class="tok-tag">' + escapeHtml(p2) + '</span>'
+        ).replace(/([a-zA-Z-]+)(=)("[^"]*"|'[^']*')/g, (m, a, eq, val) =>
+          '<span class="tok-attr">' + escapeHtml(a) + '</span>' + escapeHtml(eq) + '<span class="tok-string">' + escapeHtml(val) + '</span>'
+        );
+        out += tagged;
+        i = end; continue;
+      }
+      out += escapeHtml(code[i]);
+      i++;
+    }
+    return out;
+  }
+
+  function highlightCss(code){
+    return highlightGeneric(code, [], null, ["/*","*/"])
+      .replace(/([a-zA-Z-]+)(\s*:)/g, '<span class="tok-attr">$1</span>$2')
+      .replace(/([.#]?[a-zA-Z][a-zA-Z0-9_-]*)(\s*\{)/g, '<span class="tok-keyword">$1</span>$2');
+  }
+
+  function highlightMd(code){
+    const escaped = escapeHtml(code);
+    return escaped
+      .replace(/^(#{1,6}\s.*)$/gm, '<span class="tok-md">$1</span>')
+      .replace(/(\*\*[^*]+\*\*|__[^_]+__)/g, '<span class="tok-keyword">$1</span>')
+      .replace(/(`[^`]+`)/g, '<span class="tok-string">$1</span>');
+  }
+
+  function highlightYaml(code){
+    return highlightGeneric(code, [], "#", null)
+      .replace(/^([\w.-]+)(\s*:)/gm, '<span class="tok-attr">$1</span>$2');
+  }
+
+  function highlightCode_(code, lang){
+    switch(lang){
+      case "html": return highlightHtml(code);
+      case "css": return highlightCss(code);
+      case "js": return highlightGeneric(code, KEYWORDS.js, "//", ["/*","*/"]);
+      case "py": return highlightGeneric(code, KEYWORDS.py, "#", null);
+      case "c": return highlightGeneric(code, KEYWORDS.c, "//", ["/*","*/"]);
+      case "md": return highlightMd(code);
+      case "yaml": return highlightYaml(code);
+      default: return escapeHtml(code);
+    }
+  }
+
+  /* ================= NÚMEROS DE LÍNEA / RESALTADO / MINIMAPA ================= */
+  let rafPending = false;
+  function scheduleUpdate(){
+    if(rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(()=>{
+      rafPending = false;
+      updateLineNumbers();
+      updateStatusBar();
+      updateHighlight();
+      updateCurrentLineHighlight();
+      updateMinimap();
+    });
+  }
+
+  function updateLineNumbers(){
+    const lines = editor.value.split("\n");
+    let buf = "";
+    for(let i=1;i<=lines.length;i++) buf += i + "\n";
+    lineNumbers.textContent = buf;
+  }
+
+  function currentLineNumber(){
+    const upToCursor = editor.value.substring(0, editor.selectionStart);
+    return upToCursor.split("\n").length;
+  }
+
+  function syncScroll(){
+    lineNumbers.scrollTop = editor.scrollTop;
+    highlightLayer.scrollTop = editor.scrollTop;
+    highlightLayer.scrollLeft = editor.scrollLeft;
+    updateCurrentLineHighlight();
+  }
+
+  function updateStatusBar(){
+    const value = editor.value;
+    const selStart = editor.selectionStart;
+    const upToCursor = value.substring(0, selStart);
+    const linesUpTo = upToCursor.split("\n");
+    const currentLine = linesUpTo.length;
+    const currentCol = linesUpTo[linesUpTo.length-1].length + 1;
+    const totalLines = value.split("\n").length;
+    const totalChars = value.length;
+
+    statusPosition.textContent = `Ln ${currentLine}, Col ${currentCol}`;
+    statusLines.textContent = `Líneas: ${totalLines}`;
+    statusChars.textContent = `Caracteres: ${totalChars}`;
+    statusWrap.textContent = `Ajuste: ${state.wordWrap ? "Sí" : "No"}`;
+    statusZoom.textContent = `Zoom: ${state.zoom}%`;
+  }
+
+  function updateHighlight(){
+    const tab = getActiveTab();
+    const ext = getExtension(tab.fileName);
+    const lang = langForExt(ext);
+    highlightCode.innerHTML = highlightCode_(editor.value, lang) + "\n";
+  }
+
+  function updateCurrentLineHighlight(){
+    if(!state.showCurrentLine){
+      currentLineHighlight.style.display = "none";
+      return;
+    }
+    currentLineHighlight.style.display = "block";
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    const line = currentLineNumber();
+    const top = 8 + (line - 1) * lineHeight - editor.scrollTop;
+    currentLineHighlight.style.top = top + "px";
+    currentLineHighlight.style.height = lineHeight + "px";
+  }
+
+  function updateMinimap(){
+    if(!state.showMinimap){ minimap.classList.add("hidden"); return; }
+    minimap.classList.remove("hidden");
+    const rect = minimap.getBoundingClientRect();
+    if(rect.width === 0 || rect.height === 0) return;
+    minimap.width = rect.width;
+    minimap.height = rect.height;
+    minimapCtx.clearRect(0,0,minimap.width,minimap.height);
+    const lines = editor.value.split("\n");
+    const scale = 2;
+    const maxLines = Math.floor(minimap.height / scale);
+    minimapCtx.fillStyle = "#3c3c3c";
+    for(let i=0;i<Math.min(lines.length, maxLines);i++){
+      const len = Math.min(lines[i].length, 60);
+      if(len === 0) continue;
+      const w = (len / 60) * (minimap.width - 8);
+      minimapCtx.fillRect(4, i*scale, w, 1.4);
+    }
+    const totalLines = lines.length || 1;
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    const visibleLines = editor.clientHeight / lineHeight;
+    const firstVisible = editor.scrollTop / lineHeight;
+    const viewTop = (firstVisible / totalLines) * Math.min(totalLines, maxLines) * scale;
+    const viewHeight = Math.max(6, (visibleLines / totalLines) * Math.min(totalLines, maxLines) * scale);
+    minimapCtx.fillStyle = "rgba(255,255,255,.08)";
+    minimapCtx.fillRect(0, viewTop, minimap.width, viewHeight);
+  }
+
+  minimap.addEventListener("mousedown", (e)=>{
+    const rect = minimap.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const totalLines = editor.value.split("\n").length || 1;
+    const scale = 2;
+    const maxLines = Math.floor(minimap.height / scale);
+    const targetLine = (y / (Math.min(totalLines, maxLines) * scale)) * totalLines;
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    editor.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
+    syncScroll();
+    updateMinimap();
+  });
+
+  /* ================= EVENTOS DEL EDITOR ================= */
+  editor.addEventListener("input", ()=>{
+    getActiveTab().content = editor.value;
+    markDirty();
+    scheduleUpdate();
+    updateAutocomplete();
+    updateWordHighlight();
+    externalChangeBanner.classList.remove("active");
+    if(state.previewActive) schedulePreviewUpdate();
+  });
+  editor.addEventListener("scroll", syncScroll);
+  editor.addEventListener("keyup", ()=>{ updateStatusBar(); updateCurrentLineHighlight(); updateWordHighlight(); });
+  editor.addEventListener("click", ()=>{ updateStatusBar(); updateCurrentLineHighlight(); updateWordHighlight(); autocompleteBox.classList.remove("active"); });
+
+  const CLOSERS = { "(":")", "[":"]", "{":"}", '"':'"', "'":"'", "`":"`" };
+  const OPENERS = { ")":"(", "]":"[", "}":"{" };
+
+  editor.addEventListener("keydown", (e)=>{
+    if(autocompleteBox.classList.contains("active")){
+      const items = Array.from(autocompleteBox.querySelectorAll(".ac-item"));
+      if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+        e.preventDefault();
+        items[acSelectedIndex]?.classList.remove("selected");
+        acSelectedIndex = e.key === "ArrowDown"
+          ? Math.min(items.length - 1, acSelectedIndex + 1)
+          : Math.max(0, acSelectedIndex - 1);
+        items[acSelectedIndex]?.classList.add("selected");
+        items[acSelectedIndex]?.scrollIntoView({ block:"nearest" });
+        return;
+      }
+      if((e.key === "Enter" || e.key === "Tab") && items[acSelectedIndex]){
+        e.preventDefault();
+        applyAutocomplete(items[acSelectedIndex].textContent);
+        return;
+      }
+      if(e.key === "Escape"){
+        autocompleteBox.classList.remove("active");
+        return;
+      }
+    }
+    if(e.key === "Tab"){
+      e.preventDefault();
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const tab = "    ";
+      editor.value = editor.value.substring(0,start) + tab + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = start + tab.length;
+      getActiveTab().content = editor.value;
+      markDirty();
+      scheduleUpdate();
+      if(state.previewActive) schedulePreviewUpdate();
+      return;
+    }
+
+    if(state.autoClose && CLOSERS[e.key]){
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const selected = editor.value.substring(start, end);
+      if(selected.length){
+        e.preventDefault();
+        const open = e.key, close = CLOSERS[e.key];
+        editor.value = editor.value.substring(0,start) + open + selected + close + editor.value.substring(end);
+        editor.selectionStart = start + 1;
+        editor.selectionEnd = start + 1 + selected.length;
+        getActiveTab().content = editor.value;
+        markDirty();
+        scheduleUpdate();
+        return;
+      }
+      const nextChar = editor.value[start];
+      const isQuote = e.key === '"' || e.key === "'" || e.key === "`";
+      if(isQuote && nextChar === e.key){
+        e.preventDefault();
+        editor.selectionStart = editor.selectionEnd = start + 1;
+        return;
+      }
+      e.preventDefault();
+      const close = CLOSERS[e.key];
+      editor.value = editor.value.substring(0,start) + e.key + close + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = start + 1;
+      getActiveTab().content = editor.value;
+      markDirty();
+      scheduleUpdate();
+      return;
+    }
+
+    if(state.autoClose && OPENERS[e.key]){
+      const start = editor.selectionStart;
+      const nextChar = editor.value[start];
+      if(nextChar === e.key){
+        e.preventDefault();
+        editor.selectionStart = editor.selectionEnd = start + 1;
+        return;
+      }
+    }
+
+    if(e.key === "Backspace"){
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      if(start === end && start > 0){
+        const prevChar = editor.value[start-1];
+        const nextChar = editor.value[start];
+        if(state.autoClose && CLOSERS[prevChar] === nextChar){
+          e.preventDefault();
+          editor.value = editor.value.substring(0,start-1) + editor.value.substring(start+1);
+          editor.selectionStart = editor.selectionEnd = start - 1;
+          getActiveTab().content = editor.value;
+          markDirty();
+          scheduleUpdate();
+        }
+      }
+    }
+  });
+
+  editor.addEventListener("wheel", (e)=>{
+    if(e.ctrlKey){
+      e.preventDefault();
+      setZoom(state.zoom + (e.deltaY < 0 ? 10 : -10));
+    }
+  }, { passive:false });
+
+  // Zoom por pellizco (pinch) en pantallas táctiles
+  let pinchStartDist = null;
+  let pinchStartZoom = 100;
+  function touchDistance(touches){
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+  editor.addEventListener("touchstart", (e)=>{
+    if(e.touches.length === 2){
+      pinchStartDist = touchDistance(e.touches);
+      pinchStartZoom = state.zoom;
+    }
+  }, { passive:true });
+  editor.addEventListener("touchmove", (e)=>{
+    if(e.touches.length === 2 && pinchStartDist){
+      e.preventDefault();
+      const dist = touchDistance(e.touches);
+      const ratio = dist / pinchStartDist;
+      setZoom(Math.round(pinchStartZoom * ratio));
+    }
+  }, { passive:false });
+  editor.addEventListener("touchend", (e)=>{
+    if(e.touches.length < 2) pinchStartDist = null;
+  });
+
+  /* ================= ZOOM ================= */
+  function setZoom(value){
+    state.zoom = Math.min(300, Math.max(50, value));
+    const fontSize = 14 * (state.zoom/100);
+    editor.style.fontSize = fontSize + "px";
+    highlightLayer.style.fontSize = fontSize + "px";
+    lineNumbers.style.fontSize = fontSize + "px";
+    updateStatusBar();
+    scheduleUpdate();
+  }
+
+  /* ================= TOGGLES DE VISTA ================= */
+  function toggleWordWrap(){
+    state.wordWrap = !state.wordWrap;
+    editor.classList.toggle("wrap", state.wordWrap);
+    highlightLayer.classList.toggle("wrap", state.wordWrap);
+    document.querySelector('[data-action="wordwrap"]').classList.toggle("checked", state.wordWrap);
+    updateStatusBar();
+  }
+  function toggleLineNumbers(){
+    state.showLineNumbers = !state.showLineNumbers;
+    lineNumbers.classList.toggle("hidden", !state.showLineNumbers);
+    document.querySelector('[data-action="linenumbers"]').classList.toggle("checked", state.showLineNumbers);
+  }
+  function toggleMinimap(){
+    state.showMinimap = !state.showMinimap;
+    document.querySelector('[data-action="minimap"]').classList.toggle("checked", state.showMinimap);
+    updateMinimap();
+  }
+  function toggleCurrentLine(){
+    state.showCurrentLine = !state.showCurrentLine;
+    document.querySelector('[data-action="currentline"]').classList.toggle("checked", state.showCurrentLine);
+    updateCurrentLineHighlight();
+  }
+  function toggleAutoClose(){
+    state.autoClose = !state.autoClose;
+    document.querySelector('[data-action="autoclose"]').classList.toggle("checked", state.autoClose);
+  }
+
+  /* ================= PESTAÑAS ================= */
+  function renderTabs(){
+    tabbarEl.innerHTML = "";
+    state.tabs.forEach(tab=>{
+      const el = document.createElement("div");
+      el.className = "tab" + (tab.id === state.activeTabId ? " active" : "") + (tab.isDirty ? " dirty" : "");
+      el.dataset.tabId = tab.id;
+      el.innerHTML =
+        '<span class="tab-dot"></span>' +
+        '<span class="tab-name">' + escapeHtml(tab.fileName) + '</span>' +
+        '<span class="tab-close">×</span>';
+      el.addEventListener("click", (e)=>{
+        if(e.target.classList.contains("tab-close")){
+          closeTab(tab.id);
+        } else {
+          switchToTab(tab.id);
+        }
+      });
+      tabbarEl.appendChild(el);
+    });
+    const newBtn = document.createElement("div");
+    newBtn.className = "tab-new";
+    newBtn.textContent = "+";
+    newBtn.title = "Nueva pestaña";
+    newBtn.addEventListener("click", ()=> newTab());
+    tabbarEl.appendChild(newBtn);
+  }
+
+  function loadTabIntoEditor(tab){
+    editor.value = tab.content;
+    editor.classList.toggle("wrap", state.wordWrap);
+    setZoom(state.zoom);
+    updateTitle();
+    scheduleUpdate();
+    updateWordHighlight();
+    autocompleteBox.classList.remove("active");
+    externalChangeBanner.classList.remove("active");
+    editor.focus();
+  }
+
+  function switchToTab(tabId){
+    if(tabId === state.activeTabId) return;
+    getActiveTab().content = editor.value;
+    state.activeTabId = tabId;
+    loadTabIntoEditor(getActiveTab());
+    renderTabs();
+  }
+
+  function newTab(){
+    const tab = makeTab("", null, "sin título");
+    state.tabs.push(tab);
+    switchToTab(tab.id);
+  }
+
+  function closeTab(tabId, force){
+    const idx = state.tabs.findIndex(t => t.id === tabId);
+    if(idx === -1) return;
+    const tab = state.tabs[idx];
+    const doClose = ()=>{
+      state.tabs.splice(idx, 1);
+      if(state.tabs.length === 0){
+        state.tabs.push(makeTab("", null, "sin título"));
+      }
+      if(state.activeTabId === tabId){
+        const newIdx = Math.max(0, idx - 1);
+        state.activeTabId = state.tabs[newIdx].id;
+        loadTabIntoEditor(getActiveTab());
+      }
+      renderTabs();
+    };
+    if(force || !tab.isDirty){
+      doClose();
+    } else {
+      const ok = confirm(`"${tab.fileName}" tiene cambios sin guardar. ¿Cerrar de todas formas?`);
+      if(ok) doClose();
+    }
+  }
+
+  /* ================= ARCHIVO: NUEVO / ABRIR / GUARDAR ================= */
+  function newFile(){
+    newTab();
+    flashMessage("Nuevo archivo creado");
+  }
+
+  async function loadFileByPath(path){
+    try{
+      const { readTextFile } = window.__TAURI__.fs;
+      const content = await readTextFile(path);
+      const fileName = path.split(/[\\/]/).pop();
+      const activeTab = getActiveTab();
+      if(!activeTab.isDirty && activeTab.content === "" && !activeTab.filePath){
+        activeTab.content = content;
+        activeTab.filePath = path;
+        activeTab.fileName = fileName;
+        activeTab.lastDiskContent = content;
+        loadTabIntoEditor(activeTab);
+        markClean();
+      } else {
+        const tab = makeTab(content, path, fileName);
+        state.tabs.push(tab);
+        switchToTab(tab.id);
+        markClean();
+      }
+      flashMessage("Archivo abierto: " + fileName);
+    }catch(err){
+      flashMessage("Error al abrir el archivo");
+    }
+  }
+
+  async function openFile(){
+    if(isTauri()){
+      try{
+        const { open } = window.__TAURI__.dialog;
+        const selected = await open({
+          multiple:false,
+          filters:[{ name:"Archivos de texto", extensions: SUPPORTED_EXT }]
+        });
+        if(!selected) return;
+        const path = Array.isArray(selected) ? selected[0] : selected;
+        await loadFileByPath(path);
+      }catch(err){
+        flashMessage("Error al abrir el archivo");
+      }
+    } else {
+      fileInput.click();
+    }
+  }
+
+  fileInput.addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const tab = makeTab(ev.target.result, null, file.name);
+      state.tabs.push(tab);
+      switchToTab(tab.id);
+      markClean();
+      flashMessage("Archivo abierto: " + file.name);
+    };
+    reader.readAsText(file);
+    fileInput.value = "";
+  });
+
+  async function saveFile(){
+    const tab = getActiveTab();
+    tab.content = editor.value;
+    if(isTauri() && tab.filePath){
+      try{
+        const { writeTextFile } = window.__TAURI__.fs;
+        await writeTextFile(tab.filePath, tab.content);
+        tab.lastDiskContent = tab.content;
+        markClean();
+        flashMessage("Archivo guardado");
+      }catch(err){
+        flashMessage("Error al guardar");
+      }
+    } else if(isTauri() && !tab.filePath){
+      saveFileAs();
+    } else {
+      downloadAsFile(tab.fileName === "sin título" ? "sin-titulo.txt" : tab.fileName);
+      markClean();
+      flashMessage("Archivo descargado");
+    }
+  }
+
+  async function saveFileAs(){
+    const tab = getActiveTab();
+    tab.content = editor.value;
+    if(isTauri()){
+      try{
+        const { save } = window.__TAURI__.dialog;
+        const { writeTextFile } = window.__TAURI__.fs;
+        const path = await save({
+          filters:[{ name:"Archivos de texto", extensions: SUPPORTED_EXT }]
+        });
+        if(!path) return;
+        await writeTextFile(path, tab.content);
+        tab.filePath = path;
+        tab.fileName = path.split(/[\\/]/).pop();
+        tab.lastDiskContent = tab.content;
+        markClean();
+        updateTitle();
+        renderTabs();
+        flashMessage("Archivo guardado como " + tab.fileName);
+      }catch(err){
+        flashMessage("Error al guardar el archivo");
+      }
+    } else {
+      const name = prompt("Nombre de archivo:", tab.fileName !== "sin título" ? tab.fileName : "documento.txt");
+      if(!name) return;
+      downloadAsFile(name);
+      tab.fileName = name;
+      markClean();
+      renderTabs();
+      flashMessage("Archivo descargado como " + name);
+    }
+  }
+
+  function downloadAsFile(filename){
+    const blob = new Blob([editor.value], { type:"text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=> URL.revokeObjectURL(url), 1000);
+  }
+
+  /* ================= EXPORTAR A PDF (vía impresión del sistema) ================= */
+  function exportToPdf(){
+    printArea.textContent = editor.value;
+    window.print();
+  }
+
+  /* ================= MENÚ DESPLEGABLE ================= */
+  const menus = document.querySelectorAll(".menu");
+  function closeAllMenus(){ menus.forEach(m => m.classList.remove("open")); }
+  function positionDropdown(menu){
+    const btn = menu.querySelector(".menu-btn");
+    const dropdown = menu.querySelector(".menu-dropdown");
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.top = rect.bottom + "px";
+    let left = rect.left;
+    const maxLeft = window.innerWidth - dropdown.offsetWidth - 4;
+    if(left > maxLeft) left = Math.max(4, maxLeft);
+    dropdown.style.left = left + "px";
+  }
+  menus.forEach(menu=>{
+    const btn = menu.querySelector(".menu-btn");
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const wasOpen = menu.classList.contains("open");
+      closeAllMenus();
+      if(!wasOpen){ menu.classList.add("open"); positionDropdown(menu); }
+    });
+  });
+  document.addEventListener("click", closeAllMenus);
+  window.addEventListener("resize", ()=>{
+    const openMenu = document.querySelector(".menu.open");
+    if(openMenu) positionDropdown(openMenu);
+    updateMinimap();
+  });
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape"){ closeAllMenus(); closeSearchDialog(); closeAboutDialog(); }
+  });
+
+  /* ================= ACCIONES DE MENÚ ================= */
+  document.querySelectorAll(".menu-item[data-action]").forEach(item=>{
+    item.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      handleAction(item.getAttribute("data-action"));
+      closeAllMenus();
+    });
+  });
+
+  function handleAction(action){
+    switch(action){
+      case "new": newFile(); break;
+      case "open": openFile(); break;
+      case "save": saveFile(); break;
+      case "saveas": saveFileAs(); break;
+      case "closetab": closeTab(state.activeTabId); break;
+      case "exportpdf": exportToPdf(); break;
+      case "undo": doUndo(); break;
+      case "redo": doRedo(); break;
+      case "find": openSearchDialog(false); break;
+      case "replace": openSearchDialog(true); break;
+      case "selectall": editor.focus(); editor.select(); break;
+      case "autoclose": toggleAutoClose(); break;
+      case "autocomplete": state.autoComplete = !state.autoComplete; document.querySelector('[data-action="autocomplete"]').classList.toggle("checked", state.autoComplete); break;
+      case "wordhighlight": state.wordHighlight = !state.wordHighlight; document.querySelector('[data-action="wordhighlight"]').classList.toggle("checked", state.wordHighlight); updateWordHighlight(); break;
+      case "goto": goToLine(); break;
+      case "readonly": toggleReadOnly(); break;
+      case "toggleterminal": toggleTerminal(); break;
+      case "runfile": runActiveFile(); break;
+      case "lint": lintCurrentFile(); break;
+      case "wordwrap": toggleWordWrap(); break;
+      case "linenumbers": toggleLineNumbers(); break;
+      case "minimap": toggleMinimap(); break;
+      case "currentline": toggleCurrentLine(); break;
+      case "zoomin": setZoom(state.zoom + 10); break;
+      case "zoomout": setZoom(state.zoom - 10); break;
+      case "zoomreset": setZoom(100); break;
+      case "togglepreview": togglePreview(); break;
+      case "refreshpreview": updatePreview(); flashMessage("Vista previa actualizada"); break;
+      case "about": openAboutDialog(); break;
+    }
+  }
+
+  function doUndo(){ editor.focus(); try{ document.execCommand("undo"); }catch(e){} getActiveTab().content = editor.value; scheduleUpdate(); }
+  function doRedo(){ editor.focus(); try{ document.execCommand("redo"); }catch(e){} getActiveTab().content = editor.value; scheduleUpdate(); }
+
+  /* ================= VISTA PREVIA (HTML + MARKDOWN) ================= */
+  let previewDebounceTimer = null;
+  function schedulePreviewUpdate(){
+    clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = setTimeout(updatePreview, 500);
+  }
+
+  function markdownToHtml(md){
+    let html = escapeHtml(md);
+    html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>")
+               .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+               .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+               .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+               .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+               .replace(/`([^`]+)`/g, "<code>$1</code>")
+               .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" style="max-width:100%">')
+               .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+               .replace(/^&gt; (.*)$/gm, "<blockquote>$1</blockquote>")
+               .replace(/^-{3,}$/gm, "<hr>")
+               .replace(/^\s*[-*] (.*)$/gm, "<li>$1</li>")
+               .replace(/(<li>.*<\/li>\n?)+/g, (m)=> "<ul>" + m + "</ul>")
+               .replace(/\n{2,}/g, "</p><p>")
+               .replace(/\n/g, "<br>");
+    return '<p style="font-family:system-ui,sans-serif;color:#111;padding:20px;line-height:1.6;">' + html + "</p>";
+  }
+
+  function updatePreview(){
+    if(!state.previewActive) return;
+    const tab = getActiveTab();
+    const ext = getExtension(tab.fileName);
+    const isMd = ext === "md";
+    const content = isMd ? markdownToHtml(editor.value) : editor.value;
+    const blob = new Blob([content], { type: "text/html" });
+    const newUrl = URL.createObjectURL(blob);
+    previewFrame.src = newUrl;
+    if(state.previewBlobUrl){
+      const oldUrl = state.previewBlobUrl;
+      setTimeout(()=> URL.revokeObjectURL(oldUrl), 1000);
+    }
+    state.previewBlobUrl = newUrl;
+  }
+
+  function togglePreview(){
+    state.previewActive = !state.previewActive;
+    previewPane.classList.toggle("active", state.previewActive);
+    editorArea.classList.toggle("preview-active", state.previewActive);
+    document.querySelector('[data-action="togglepreview"]').classList.toggle("checked", state.previewActive);
+    if(state.previewActive){
+      updatePreview();
+    } else if(state.previewBlobUrl){
+      URL.revokeObjectURL(state.previewBlobUrl);
+      state.previewBlobUrl = null;
+      previewFrame.src = "about:blank";
+    }
+  }
+
+  /* ================= BÚSQUEDA / REEMPLAZO ================= */
+  function openSearchDialog(withReplace){
+    state.searchMode = withReplace ? "replace" : "find";
+    replaceRow.style.display = withReplace ? "block" : "none";
+    searchTitle.textContent = withReplace ? "Buscar y Reemplazar" : "Buscar";
+    searchOverlay.classList.add("active");
+    searchInput.focus();
+    searchInput.select();
+  }
+  function closeSearchDialog(){ searchOverlay.classList.remove("active"); }
+  document.getElementById("btn-search-close").addEventListener("click", closeSearchDialog);
+  searchOverlay.addEventListener("click", (e)=>{ if(e.target === searchOverlay) closeSearchDialog(); });
+
+  function getSearchTerm(){ return searchInput.value; }
+
+  function findMatch(direction){
+    const term = getSearchTerm();
+    if(!term){ flashMessage("Escribe un término de búsqueda"); return; }
+    const text = caseSensitive.checked ? editor.value : editor.value.toLowerCase();
+    const searchTerm = caseSensitive.checked ? term : term.toLowerCase();
+    let startPos = editor.selectionEnd;
+    let index = -1;
+    if(direction === "next"){
+      index = text.indexOf(searchTerm, startPos);
+      if(index === -1) index = text.indexOf(searchTerm, 0);
+    } else {
+      const before = text.substring(0, editor.selectionStart);
+      index = before.lastIndexOf(searchTerm);
+      if(index === -1) index = text.lastIndexOf(searchTerm);
+    }
+    if(index === -1){ flashMessage("No se encontraron resultados"); return; }
+    editor.focus();
+    editor.setSelectionRange(index, index + searchTerm.length);
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    const linesBefore = editor.value.substring(0,index).split("\n").length;
+    editor.scrollTop = Math.max(0, (linesBefore - 5) * lineHeight);
+    syncScroll();
+    updateStatusBar();
+  }
+
+  function replaceOne(){
+    const term = getSearchTerm();
+    if(!term) return;
+    const selected = editor.value.substring(editor.selectionStart, editor.selectionEnd);
+    const cmp = caseSensitive.checked ? selected === term : selected.toLowerCase() === term.toLowerCase();
+    if(cmp && selected.length){
+      const start = editor.selectionStart;
+      const repl = replaceInput.value;
+      editor.value = editor.value.substring(0,start) + repl + editor.value.substring(editor.selectionEnd);
+      editor.setSelectionRange(start, start + repl.length);
+      getActiveTab().content = editor.value;
+      markDirty();
+      scheduleUpdate();
+      if(state.previewActive) schedulePreviewUpdate();
+    }
+    findMatch("next");
+  }
+
+  function replaceAll(){
+    const term = getSearchTerm();
+    if(!term){ flashMessage("Escribe un término de búsqueda"); return; }
+    const repl = replaceInput.value;
+    const flags = caseSensitive.checked ? "g" : "gi";
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, flags);
+    const matches = editor.value.match(regex);
+    editor.value = editor.value.replace(regex, repl);
+    getActiveTab().content = editor.value;
+    markDirty();
+    scheduleUpdate();
+    if(state.previewActive) schedulePreviewUpdate();
+    flashMessage(`${matches ? matches.length : 0} reemplazo(s) realizado(s)`);
+  }
+
+  document.getElementById("btn-find-next").addEventListener("click", ()=>findMatch("next"));
+  document.getElementById("btn-find-prev").addEventListener("click", ()=>findMatch("prev"));
+  document.getElementById("btn-replace").addEventListener("click", replaceOne);
+  document.getElementById("btn-replace-all").addEventListener("click", replaceAll);
+  searchInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") findMatch("next"); });
+
+  /* ================= ACERCA DE ================= */
+  function openAboutDialog(){ aboutOverlay.classList.add("active"); }
+  function closeAboutDialog(){ aboutOverlay.classList.remove("active"); }
+  document.getElementById("btn-about-close").addEventListener("click", closeAboutDialog);
+  aboutOverlay.addEventListener("click", (e)=>{ if(e.target === aboutOverlay) closeAboutDialog(); });
+
+  /* ================= ATAJOS DE TECLADO ================= */
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "F5"){ e.preventDefault(); runActiveFile(); return; }
+  });
+
+  document.addEventListener("keydown", (e)=>{
+    const ctrl = e.ctrlKey || e.metaKey;
+    if(!ctrl) return;
+    if(ctrl && e.shiftKey && e.key.toLowerCase() === "s"){ e.preventDefault(); saveFileAs(); return; }
+    switch(e.key.toLowerCase()){
+      case "n": e.preventDefault(); newFile(); break;
+      case "o": e.preventDefault(); openFile(); break;
+      case "s": e.preventDefault(); saveFile(); break;
+      case "w": e.preventDefault(); closeTab(state.activeTabId); break;
+      case "f": e.preventDefault(); openSearchDialog(false); break;
+      case "h": e.preventDefault(); openSearchDialog(true); break;
+      case "g": e.preventDefault(); goToLine(); break;
+      case "ñ": e.preventDefault(); toggleTerminal(); break;
+      case "a":
+        if(document.activeElement !== editor){ e.preventDefault(); editor.focus(); editor.select(); }
+        break;
+      case "z": e.preventDefault(); doUndo(); break;
+      case "y": e.preventDefault(); doRedo(); break;
+      case "+": case "=": e.preventDefault(); setZoom(state.zoom + 10); break;
+      case "-": e.preventDefault(); setZoom(state.zoom - 10); break;
+      case "0": e.preventDefault(); setZoom(100); break;
+    }
+  });
+
+  /* ================= ARRASTRAR Y SOLTAR ================= */
+  function setupDragAndDrop(){
+    if(isTauri()){
+      try{
+        window.__TAURI__.event.listen("tauri://drag-drop", async (event)=>{
+          const paths = event.payload && event.payload.paths;
+          if(!paths || !paths.length) return;
+          const path = paths[0];
+          if(!hasSupportedExtension(path)){ flashMessage("Formato de archivo no soportado"); return; }
+          await loadFileByPath(path);
+        });
+      }catch(err){ /* API no disponible */ }
+    } else {
+      ["dragenter","dragover"].forEach(evt=>{
+        document.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); });
+      });
+      document.addEventListener("drop", (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if(!file) return;
+        if(!hasSupportedExtension(file.name)){ flashMessage("Formato de archivo no soportado"); return; }
+        const reader = new FileReader();
+        reader.onload = (ev)=>{
+          const tab = makeTab(ev.target.result, null, file.name);
+          state.tabs.push(tab);
+          switchToTab(tab.id);
+          markClean();
+          flashMessage("Archivo abierto: " + file.name);
+        };
+        reader.readAsText(file);
+      });
+    }
+  }
+
+  /* ================= ARCHIVO ABIERTO CON "ABRIR CON" ================= */
+  async function loadLaunchFileIfAny(){
+    if(!isTauri()) return;
+    try{
+      const invoke = (window.__TAURI__.core && window.__TAURI__.core.invoke) || window.__TAURI__.invoke;
+      if(!invoke) return;
+      const path = await invoke("get_launch_file");
+      if(path){ await loadFileByPath(path); }
+    }catch(err){ /* comando no disponible */ }
+  }
+
+  /* ================= RECORDAR TAMAÑO Y POSICIÓN DE VENTANA ================= */
+  const WIN_STATE_KEY = "darknote_window_state";
+  async function restoreWindowState(){
+    if(!isTauri() || isAndroid) return;
+    try{
+      const saved = localStorage.getItem(WIN_STATE_KEY);
+      if(!saved) return;
+      const { w, h, x, y } = JSON.parse(saved);
+      const { getCurrentWindow, PhysicalSize, PhysicalPosition } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      if(w && h) await appWindow.setSize(new PhysicalSize(w, h));
+      if(typeof x === "number" && typeof y === "number") await appWindow.setPosition(new PhysicalPosition(x, y));
+    }catch(err){ /* se ignora */ }
+  }
+
+  function setupWindowStatePersistence(){
+    if(!isTauri() || isAndroid) return;
+    try{
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+      let saveTimer = null;
+      const scheduleSave = ()=>{
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async ()=>{
+          try{
+            const size = await appWindow.outerSize();
+            const pos = await appWindow.outerPosition();
+            localStorage.setItem(WIN_STATE_KEY, JSON.stringify({
+              w: size.width, h: size.height, x: pos.x, y: pos.y
+            }));
+          }catch(err){ /* se ignora */ }
+        }, 400);
+      };
+      appWindow.onResized(scheduleSave);
+      appWindow.onMoved(scheduleSave);
+    }catch(err){ /* API no disponible */ }
+  }
+
+  /* ================= CIERRE DE VENTANA ================= */
+  window.addEventListener("beforeunload", (e)=>{
+    if(!isTauri() && state.tabs.some(t=>t.isDirty)){
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
+  if(isTauri() && !isAndroid){
+    try{
+      const { getCurrentWindow } = window.__TAURI__.window;
+      const appWindow = getCurrentWindow();
+
+      async function guardarTab(tab){
+        try{
+          const { writeTextFile } = window.__TAURI__.fs;
+          if(tab.filePath){
+            await writeTextFile(tab.filePath, tab.content);
+            return true;
+          }
+          const { save } = window.__TAURI__.dialog;
+          const path = await save({ filters:[{ name:"Archivos de texto", extensions: SUPPORTED_EXT }] });
+          if(!path) return false;
+          await writeTextFile(path, tab.content);
+          tab.filePath = path;
+          tab.fileName = path.split(/[\\/]/).pop();
+          return true;
+        }catch(err){
+          alert("No se pudo guardar \"" + tab.fileName + "\": " + err);
+          return false;
+        }
+      }
+
+      function forzarCierre(){
+        setTimeout(()=>{
+          appWindow.destroy().catch(e=> alert("No se pudo cerrar la ventana: " + e));
+        }, 0);
+      }
+
+      appWindow.onCloseRequested((event)=>{
+        event.preventDefault();
+        getActiveTab().content = editor.value;
+        const dirtyTabs = state.tabs.filter(t=>t.isDirty);
+        if(dirtyTabs.length === 0){ forzarCierre(); return; }
+
+        const nombres = dirtyTabs.map(t=>t.fileName).join(", ");
+        const deseaGuardar = confirm(
+          `Hay cambios sin guardar en: ${nombres}\n\nAceptar = Guardar todo y salir\nCancelar = ver más opciones`
+        );
+        if(deseaGuardar){
+          (async ()=>{
+            for(const tab of dirtyTabs){
+              const ok = await guardarTab(tab);
+              if(!ok) return;
+            }
+            forzarCierre();
+          })();
+        } else {
+          const descartar = confirm("¿Salir sin guardar los cambios? Se perderán.");
+          if(descartar) forzarCierre();
+        }
+      });
+    }catch(err){ /* API no disponible */ }
+  }
+
+  /* ================= AUTOCOMPLETADO DE PALABRAS ================= */
+  function getWordAtCursor(text, pos){
+    let start = pos, end = pos;
+    while(start > 0 && /[A-Za-z0-9_]/.test(text[start-1])) start--;
+    while(end < text.length && /[A-Za-z0-9_]/.test(text[end])) end++;
+    return { word: text.slice(start, end), start, end };
+  }
+
+  function collectDocumentWords(exclude){
+    const words = new Set();
+    const matches = editor.value.match(/[A-Za-z_][A-Za-z0-9_]{2,}/g) || [];
+    matches.forEach(w=>{ if(w !== exclude) words.add(w); });
+    return Array.from(words);
+  }
+
+  let acSelectedIndex = -1;
+  function updateAutocomplete(){
+    if(!state.autoComplete){ autocompleteBox.classList.remove("active"); return; }
+    const pos = editor.selectionStart;
+    if(pos !== editor.selectionEnd){ autocompleteBox.classList.remove("active"); return; }
+    const { word } = getWordAtCursor(editor.value, pos);
+    if(word.length < 2){ autocompleteBox.classList.remove("active"); return; }
+    const candidates = collectDocumentWords(word)
+      .filter(w => w.toLowerCase().startsWith(word.toLowerCase()) && w !== word)
+      .slice(0, 8);
+    if(candidates.length === 0){ autocompleteBox.classList.remove("active"); return; }
+    acSelectedIndex = 0;
+    autocompleteBox.innerHTML = "";
+    candidates.forEach((w, i)=>{
+      const item = document.createElement("div");
+      item.className = "ac-item" + (i === 0 ? " selected" : "");
+      item.textContent = w;
+      item.addEventListener("mousedown", (e)=>{
+        e.preventDefault();
+        applyAutocomplete(w);
+      });
+      autocompleteBox.appendChild(item);
+    });
+    const rect = editor.getBoundingClientRect();
+    autocompleteBox.style.left = (rect.left + 12) + "px";
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    const line = currentLineNumber();
+    const top = rect.top + 8 + line * lineHeight - editor.scrollTop;
+    autocompleteBox.style.top = Math.min(top, window.innerHeight - 170) + "px";
+    autocompleteBox.classList.add("active");
+  }
+
+  function applyAutocomplete(word){
+    const pos = editor.selectionStart;
+    const { start, end } = getWordAtCursor(editor.value, pos);
+    editor.value = editor.value.substring(0, start) + word + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + word.length;
+    getActiveTab().content = editor.value;
+    markDirty();
+    scheduleUpdate();
+    autocompleteBox.classList.remove("active");
+    editor.focus();
+  }
+
+  autocompleteBox.addEventListener("wheel", (e)=> e.stopPropagation());
+
+  /* ================= IR A LÍNEA (Ctrl+G) ================= */
+  function goToLine(){
+    const totalLines = editor.value.split("\n").length;
+    const input = prompt(`Ir a línea (1 - ${totalLines}):`, String(currentLineNumber()));
+    if(!input) return;
+    const target = Math.min(totalLines, Math.max(1, parseInt(input, 10) || 1));
+    const lines = editor.value.split("\n");
+    let charIndex = 0;
+    for(let i=0;i<target-1;i++) charIndex += lines[i].length + 1;
+    editor.focus();
+    editor.setSelectionRange(charIndex, charIndex);
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    editor.scrollTop = Math.max(0, (target - 5) * lineHeight);
+    syncScroll();
+    updateStatusBar();
+    updateCurrentLineHighlight();
+  }
+
+  /* ================= RESALTAR COINCIDENCIAS DE PALABRA ================= */
+  let measureCtx = null;
+  let cachedCharWidth = 8.4;
+  function measureCharWidth(){
+    if(!measureCtx){
+      const canvas = document.createElement("canvas");
+      measureCtx = canvas.getContext("2d");
+    }
+    const fontSize = 14 * (state.zoom/100);
+    measureCtx.font = fontSize + "px Consolas, 'Courier New', monospace";
+    cachedCharWidth = measureCtx.measureText("0").width;
+    return cachedCharWidth;
+  }
+
+  let wordHighlightEls = [];
+  let lastHighlightedWord = "";
+  function updateWordHighlight(){
+    wordHighlightEls.forEach(el => el.remove());
+    wordHighlightEls = [];
+    if(!state.wordHighlight) return;
+    if(editor.selectionStart !== editor.selectionEnd) return;
+    const { word } = getWordAtCursor(editor.value, editor.selectionStart);
+    if(word.length < 2) return;
+    lastHighlightedWord = word;
+    const charWidth = measureCharWidth();
+    const lineHeight = LINE_HEIGHT_BASE * (state.zoom/100);
+    const lines = editor.value.split("\n");
+    const wordRegex = new RegExp("\\b" + word.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "\\b", "g");
+    lines.forEach((lineText, lineIdx)=>{
+      let m;
+      wordRegex.lastIndex = 0;
+      while((m = wordRegex.exec(lineText)) !== null){
+        const box = document.createElement("div");
+        box.className = "word-match-highlight";
+        box.style.top = (8 + lineIdx * lineHeight - editor.scrollTop) + "px";
+        box.style.left = (12 + m.index * charWidth - editor.scrollLeft) + "px";
+        box.style.width = (word.length * charWidth) + "px";
+        box.style.height = lineHeight + "px";
+        editorStack().appendChild(box);
+        wordHighlightEls.push(box);
+      }
+    });
+  }
+  function editorStack(){ return document.getElementById("editor-stack"); }
+
+  /* ================= MODO SOLO LECTURA ================= */
+  function toggleReadOnly(){
+    state.readOnly = !state.readOnly;
+    editor.readOnly = state.readOnly;
+    editor.classList.toggle("readonly", state.readOnly);
+    readonlyBadge.classList.toggle("active", state.readOnly);
+    document.querySelector('[data-action="readonly"]').classList.toggle("checked", state.readOnly);
+    flashMessage(state.readOnly ? "Modo solo lectura activado" : "Modo solo lectura desactivado");
+  }
+
+  /* ================= REVISAR SINTAXIS (LINTER BÁSICO) ================= */
+  function lintCurrentFile(){
+    const tab = getActiveTab();
+    const ext = getExtension(tab.fileName);
+    if(ext === "json"){
+      try{
+        JSON.parse(editor.value);
+        flashMessage("JSON válido, sin errores");
+      }catch(err){
+        alert("Error de sintaxis JSON:\n" + err.message);
+      }
+      return;
+    }
+    if(ext === "html" || ext === "htm" || ext === "xml"){
+      const stack = [];
+      const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9-]*)[^>]*?(\/?)>/g;
+      const selfClosing = new Set(["br","img","input","hr","meta","link","area","base","col","embed","source","track","wbr"]);
+      let m, problems = [];
+      while((m = tagRegex.exec(editor.value)) !== null){
+        const full = m[0], name = m[1].toLowerCase(), selfClose = m[2] === "/" || selfClosing.has(name);
+        if(full.startsWith("</")){
+          if(stack.length === 0 || stack[stack.length-1] !== name){
+            problems.push(`Etiqueta de cierre inesperada: </${name}>`);
+          } else {
+            stack.pop();
+          }
+        } else if(!selfClose){
+          stack.push(name);
+        }
+      }
+      stack.forEach(tag => problems.push(`Etiqueta sin cerrar: <${tag}>`));
+      if(problems.length === 0){
+        flashMessage("HTML sin problemas evidentes de etiquetas");
+      } else {
+        alert("Posibles problemas encontrados:\n\n" + problems.slice(0,15).join("\n"));
+      }
+      return;
+    }
+    flashMessage("Revisión de sintaxis no disponible para este tipo de archivo");
+  }
+
+  /* ================= VIGILAR CAMBIOS EXTERNOS ================= */
+  let externalCheckIgnoredFor = null;
+  async function checkExternalChanges(){
+    if(!isTauri()) return;
+    const tab = getActiveTab();
+    if(!tab.filePath || tab.isDirty) return;
+    if(externalCheckIgnoredFor === tab.filePath) return;
+    try{
+      const { readTextFile } = window.__TAURI__.fs;
+      const diskContent = await readTextFile(tab.filePath);
+      if(diskContent !== tab.lastDiskContent){
+        externalChangeText.textContent = `"${tab.fileName}" cambió fuera de DarkNote.`;
+        externalChangeBanner.classList.add("active");
+        externalChangeBanner.dataset.pendingContent = diskContent;
+      }
+    }catch(err){ /* el archivo pudo moverse o eliminarse; se ignora */ }
+  }
+  document.getElementById("btn-reload-file").addEventListener("click", ()=>{
+    const tab = getActiveTab();
+    const diskContent = externalChangeBanner.dataset.pendingContent;
+    if(typeof diskContent === "string"){
+      tab.content = diskContent;
+      tab.lastDiskContent = diskContent;
+      loadTabIntoEditor(tab);
+      markClean();
+    }
+    externalChangeBanner.classList.remove("active");
+  });
+  document.getElementById("btn-ignore-change").addEventListener("click", ()=>{
+    const tab = getActiveTab();
+    tab.lastDiskContent = externalChangeBanner.dataset.pendingContent || tab.lastDiskContent;
+    externalChangeBanner.classList.remove("active");
+  });
+
+  /* ================= TERMINAL / EJECUTAR (tauri-plugin-shell) ================= */
+  function appendTerminalLine(text, cls){
+    const line = document.createElement("div");
+    if(cls) line.style.color = cls;
+    line.textContent = text;
+    terminalOutput.appendChild(line);
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+  }
+
+  function toggleTerminal(force){
+    const show = typeof force === "boolean" ? force : !terminalPanel.classList.contains("active");
+    terminalPanel.classList.toggle("active", show);
+    if(show) terminalInput.focus();
+  }
+  document.getElementById("btn-close-terminal").addEventListener("click", ()=> toggleTerminal(false));
+
+  async function runShellCommand(command){
+    if(!isTauri() || !window.__TAURI__.shell){
+      appendTerminalLine("La terminal integrada requiere el plugin de shell de Tauri (ver instrucciones de instalación).", "#f14c4c");
+      return;
+    }
+    appendTerminalLine("> " + command, "#4ec9b0");
+    try{
+      const { Command } = window.__TAURI__.shell;
+      const cmd = Command.create("cmd", ["/C", command]);
+      cmd.stdout.on("data", line => appendTerminalLine(line));
+      cmd.stderr.on("data", line => appendTerminalLine(line, "#f14c4c"));
+      cmd.on("close", data => appendTerminalLine(`[proceso terminado con código ${data.code}]`, "#9d9d9d"));
+      await cmd.spawn();
+    }catch(err){
+      appendTerminalLine("Error al ejecutar: " + err, "#f14c4c");
+    }
+  }
+
+  terminalInput.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter" && terminalInput.value.trim()){
+      const command = terminalInput.value.trim();
+      terminalInput.value = "";
+      runShellCommand(command);
+    }
+  });
+
+  async function runActiveFile(){
+    const tab = getActiveTab();
+    if(!tab.filePath){
+      const guardar = confirm("El archivo debe guardarse antes de ejecutarlo. ¿Guardar ahora?");
+      if(!guardar) return;
+      await saveFileAs();
+      if(!getActiveTab().filePath) return;
+    } else if(tab.isDirty){
+      await saveFile();
+    }
+    const currentTab = getActiveTab();
+    const ext = getExtension(currentTab.fileName);
+    let command = null;
+    if(ext === "py") command = `python "${currentTab.filePath}"`;
+    else if(ext === "js" || ext === "ts") command = `node "${currentTab.filePath}"`;
+    else { flashMessage("No se sabe cómo ejecutar este tipo de archivo"); return; }
+    toggleTerminal(true);
+    runShellCommand(command);
+  }
+
+  /* ================= AUTOGUARDADO (ANDROID) ================= */
+  // Android no tiene un botón/evento de "cerrar ventana" confiable como
+  // el de escritorio (el usuario sale con el gesto/botón de retroceso, o
+  // la app queda en segundo plano). En vez de intentar interceptar eso,
+  // se autoguardan los archivos que YA tienen una ruta en disco, unos
+  // segundos después de dejar de escribir. Los documentos nuevos sin
+  // guardar todavía deben guardarse manualmente la primera vez.
+  let autosaveTimer = null;
+  function scheduleAutosave(){
+    if(!isAndroid || !isTauri()) return;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async ()=>{
+      const tab = getActiveTab();
+      if(!tab.isDirty || !tab.filePath) return;
+      try{
+        const { writeTextFile } = window.__TAURI__.fs;
+        await writeTextFile(tab.filePath, tab.content);
+        tab.lastDiskContent = tab.content;
+        markClean();
+        flashMessage("Guardado automáticamente");
+      }catch(err){ /* se reintentará en el próximo cambio */ }
+    }, 3000);
+  }
+  if(isAndroid){
+    editor.addEventListener("input", scheduleAutosave);
+  }
+
+  async function init(){
+    editor.value = "";
+    renderTabs();
+    updateTitle();
+    scheduleUpdate();
+    editor.focus();
+    setupDragAndDrop();
+    await restoreWindowState();
+    setupWindowStatePersistence();
+    await loadLaunchFileIfAny();
+    setInterval(checkExternalChanges, 4000);
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>

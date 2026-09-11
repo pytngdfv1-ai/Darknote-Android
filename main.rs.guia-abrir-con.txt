@@ -1,0 +1,93 @@
+// ============================================================
+// INSTRUCCIONES — este archivo es una GUÍA, no lo copies entero
+// encima de tu src-tauri/src/main.rs real (probablemente ya
+// tiene código de setup, plugins de fs/dialog registrados, etc).
+// Necesito ver tu main.rs actual para integrarlo exacto; mientras
+// tanto, aplica estos 3 cambios a mano:
+// ============================================================
+
+
+// ------------------------------------------------------------
+// 1) AGREGA ESTOS "use" AL INICIO DEL ARCHIVO (si no existen ya)
+// ------------------------------------------------------------
+use std::sync::Mutex;
+use tauri::{Manager, State};
+
+
+// ------------------------------------------------------------
+// 2) AGREGA ESTA STRUCT Y EL COMANDO get_launch_file
+//    (en cualquier parte del archivo, fuera de fn main)
+// ------------------------------------------------------------
+struct LaunchFile(Mutex<Option<String>>);
+
+const SUPPORTED_EXT: [&str; 14] = [
+    "txt", "html", "css", "js", "json", "md", "py",
+    "java", "cpp", "c", "ts", "xml", "yml", "yaml",
+];
+
+#[tauri::command]
+fn get_launch_file(state: State<LaunchFile>) -> Option<String> {
+    // .take() devuelve el valor UNA sola vez y lo deja en None,
+    // para que no se vuelva a cargar si el usuario crea un
+    // archivo nuevo o abre otro distinto después.
+    state.0.lock().unwrap().take()
+}
+
+
+// ------------------------------------------------------------
+// 3) DENTRO DE fn main(), ANTES de tauri::Builder::default(),
+//    detecta si Windows pasó una ruta de archivo como argumento
+//    (esto ocurre con doble clic o "Abrir con"):
+// ------------------------------------------------------------
+fn main() {
+    let launch_file = std::env::args()
+        .skip(1) // el primer argumento es la ruta del propio .exe
+        .find(|arg| {
+            let path = std::path::Path::new(arg);
+            path.is_file()
+                && path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| SUPPORTED_EXT.contains(&e.to_lowercase().as_str()))
+                    .unwrap_or(false)
+        });
+
+    tauri::Builder::default()
+        // -------------------------------------------------------
+        // Si ya tienes .manage(...) para otro estado, solo AGREGA
+        // esta línea adicional, no reemplaces las que ya existan.
+        // -------------------------------------------------------
+        .manage(LaunchFile(Mutex::new(launch_file)))
+        // -------------------------------------------------------
+        // Si ya tienes .invoke_handler(tauri::generate_handler![...])
+        // con otros comandos, solo AGREGA get_launch_file dentro de
+        // esos corchetes, junto a los que ya tengas.
+        // Ejemplo si no tienes ninguno todavía:
+        // -------------------------------------------------------
+        .invoke_handler(tauri::generate_handler![get_launch_file])
+        // -------------------------------------------------------
+        // Mantén aquí tus plugins existentes, por ejemplo:
+        // .plugin(tauri_plugin_dialog::init())
+        // .plugin(tauri_plugin_fs::init())
+        // -------------------------------------------------------
+        .run(tauri::generate_context!())
+        .expect("error al ejecutar la aplicación DarkNote");
+}
+
+
+// ============================================================
+// NOTA IMPORTANTE sobre "Abrir con" en Windows:
+// ============================================================
+// Con el bloque anterior, DarkNote YA puede recibir la ruta del
+// archivo si Windows lo lanza con esa ruta como argumento. Pero
+// para que la opción "DarkNote" aparezca en el menú contextual
+// "Abrir con" del Explorador de Windows, la app tiene que estar
+// INSTALADA (no el .exe portable suelto): el instalador NSIS es
+// el que registra las asociaciones definidas en fileAssociations
+// dentro de tauri.conf.json, en el Registro de Windows.
+//
+// Es decir: reinstala DarkNote (desinstala la versión anterior
+// si ya la tenías instalada, y corre de nuevo el instalador NSIS
+// generado con 'npm run tauri build') para que Windows reconozca
+// la nueva asociación de archivos.
+// ============================================================
