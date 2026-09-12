@@ -62,6 +62,15 @@ jobs:
       - name: Generar iconos para todas las plataformas (incluye Android)
         run: npx tauri icon icon-source.png
 
+      - name: Copiar iconos generados al proyecto Android (por si acaso)
+        run: |
+          if [ -d "src-tauri/icons/android" ] && [ -d "src-tauri/gen/android/app/src/main/res" ]; then
+            cp -rf src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/
+            echo "Iconos copiados manualmente."
+          else
+            echo "No se encontró src-tauri/icons/android; se usa lo que haya generado 'tauri icon' automáticamente."
+          fi
+
       - name: Verificar que los iconos de Android se generaron
         run: find src-tauri/gen/android -iname "ic_launcher*"
 
