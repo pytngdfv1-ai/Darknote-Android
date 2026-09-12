@@ -91,6 +91,65 @@
   .menu-sep{ height:1px; background:var(--border); margin:4px 0; }
   .menu-item.checked::before{ content:"✓ "; }
 
+  /* ===== MENÚ MÓVIL (HAMBURGUESA) ===== */
+  #hamburger-btn{
+    display:none;
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-size:18px;
+    padding:6px 12px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .mobile-menu-panel{
+    background:var(--bg-2);
+    width:280px;
+    max-width:85vw;
+    height:100%;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    box-shadow:4px 0 16px rgba(0,0,0,.5);
+  }
+  #mobile-menu-overlay{ justify-content:flex-start; }
+  .mobile-menu-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 16px;
+    font-size:15px;
+    font-weight:600;
+    color:var(--text);
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .mobile-menu-header button{
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    font-size:20px;
+    cursor:pointer;
+  }
+  .mobile-menu-body{
+    overflow-y:auto;
+    flex:1;
+    padding:6px 0;
+  }
+  .mobile-section-title{
+    padding:14px 16px 6px;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--text-dim);
+  }
+  .mobile-menu-body .menu-item{ padding:12px 16px; font-size:14px; }
+
+  @media (max-width: 680px){
+    #menubar .menu{ display:none; }
+    #hamburger-btn{ display:block; }
+  }
+
   /* ===== TAB BAR ===== */
   #tabbar{
     display:flex;
@@ -493,6 +552,8 @@
 
   <!-- ===== MENU BAR ===== -->
   <div id="menubar">
+    <button id="hamburger-btn" title="Menú">☰</button>
+
     <div class="menu" data-menu="archivo">
       <button class="menu-btn">Archivo</button>
       <div class="menu-dropdown">
@@ -562,7 +623,55 @@
     </div>
   </div>
 
-  <!-- ===== TAB BAR ===== -->
+  <!-- ===== MENÚ MÓVIL (panel deslizable) ===== -->
+  <div class="overlay" id="mobile-menu-overlay">
+    <div class="mobile-menu-panel">
+      <div class="mobile-menu-header">
+        <span>Menú</span>
+        <button id="mobile-menu-close">×</button>
+      </div>
+      <div class="mobile-menu-body">
+        <div class="mobile-section-title">Archivo</div>
+        <div class="menu-item" data-action="new"><span>Nuevo</span></div>
+        <div class="menu-item" data-action="open"><span>Abrir</span></div>
+        <div class="menu-item" data-action="save"><span>Guardar</span></div>
+        <div class="menu-item" data-action="saveas"><span>Guardar como</span></div>
+        <div class="menu-item" data-action="closetab"><span>Cerrar pestaña</span></div>
+        <div class="menu-item" data-action="exportpdf"><span>Exportar a PDF</span></div>
+        <div class="menu-item" data-action="readonly"><span>Modo solo lectura</span></div>
+
+        <div class="mobile-section-title">Edición</div>
+        <div class="menu-item" data-action="undo"><span>Deshacer</span></div>
+        <div class="menu-item" data-action="redo"><span>Rehacer</span></div>
+        <div class="menu-item" data-action="find"><span>Buscar</span></div>
+        <div class="menu-item" data-action="replace"><span>Reemplazar</span></div>
+        <div class="menu-item" data-action="selectall"><span>Seleccionar todo</span></div>
+        <div class="menu-item" data-action="goto"><span>Ir a línea</span></div>
+        <div class="menu-item" data-action="autoclose"><span>Autocerrar símbolos</span></div>
+        <div class="menu-item" data-action="autocomplete"><span>Autocompletado de palabras</span></div>
+        <div class="menu-item" data-action="wordhighlight"><span>Resaltar coincidencias</span></div>
+
+        <div class="mobile-section-title">Ver</div>
+        <div class="menu-item" data-action="wordwrap"><span>Ajuste de línea</span></div>
+        <div class="menu-item" data-action="linenumbers"><span>Números de línea</span></div>
+        <div class="menu-item" data-action="minimap"><span>Minimapa</span></div>
+        <div class="menu-item" data-action="currentline"><span>Resaltar línea actual</span></div>
+        <div class="menu-item" data-action="zoomin"><span>Aumentar zoom</span></div>
+        <div class="menu-item" data-action="zoomout"><span>Reducir zoom</span></div>
+        <div class="menu-item" data-action="zoomreset"><span>Restablecer zoom</span></div>
+
+        <div class="mobile-section-title">Herramientas</div>
+        <div class="menu-item" data-action="togglepreview"><span>Vista previa en vivo</span></div>
+        <div class="menu-item" data-action="refreshpreview"><span>Actualizar vista previa</span></div>
+        <div class="menu-item" data-action="toggleterminal"><span>Terminal</span></div>
+        <div class="menu-item" data-action="runfile"><span>Ejecutar</span></div>
+        <div class="menu-item" data-action="lint"><span>Revisar sintaxis</span></div>
+
+        <div class="mobile-section-title">Ayuda</div>
+        <div class="menu-item" data-action="about"><span>Acerca de DarkNote</span></div>
+      </div>
+    </div>
+  </div>
   <div id="tabbar"></div>
 
   <!-- ===== EDITOR AREA ===== -->
@@ -1448,7 +1557,20 @@
 
   /* ================= MENÚ DESPLEGABLE ================= */
   const menus = document.querySelectorAll(".menu");
-  function closeAllMenus(){ menus.forEach(m => m.classList.remove("open")); }
+  const mobileMenuOverlay = document.getElementById("mobile-menu-overlay");
+  const hamburgerBtn = document.getElementById("hamburger-btn");
+  function closeAllMenus(){
+    menus.forEach(m => m.classList.remove("open"));
+    mobileMenuOverlay.classList.remove("active");
+  }
+  hamburgerBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    mobileMenuOverlay.classList.toggle("active");
+  });
+  document.getElementById("mobile-menu-close").addEventListener("click", ()=> mobileMenuOverlay.classList.remove("active"));
+  mobileMenuOverlay.addEventListener("click", (e)=>{
+    if(e.target === mobileMenuOverlay) mobileMenuOverlay.classList.remove("active");
+  });
   function positionDropdown(menu){
     const btn = menu.querySelector(".menu-btn");
     const dropdown = menu.querySelector(".menu-dropdown");
