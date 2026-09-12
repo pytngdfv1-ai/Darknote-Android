@@ -56,6 +56,9 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> $GITHUB_ENV
 
+      - name: Generar iconos para todas las plataformas (incluye Android)
+        run: npx tauri icon icon-source.png
+
       - name: Inicializar proyecto Android de Tauri
         run: npx tauri android init
 
