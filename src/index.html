@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>DarkNote</title>
 <style>
   :root{
@@ -38,6 +38,10 @@
     flex-direction:column;
     height:100vh;
     width:100vw;
+    padding-top:env(safe-area-inset-top, 0px);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    padding-left:env(safe-area-inset-left, 0px);
+    padding-right:env(safe-area-inset-right, 0px);
   }
 
   /* ===== MENU BAR ===== */
@@ -117,7 +121,7 @@
     display:flex;
     align-items:center;
     justify-content:space-between;
-    padding:14px 16px;
+    padding:calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
     font-size:15px;
     font-weight:600;
     color:var(--text);
@@ -148,6 +152,16 @@
   @media (max-width: 680px){
     #menubar .menu{ display:none; }
     #hamburger-btn{ display:block; }
+  }
+
+  /* Espacio para que la barra de estado de Android (reloj, batería, wifi)
+     no tape la barra de menú, ya que la app se dibuja borde a borde. */
+  html.is-android #menubar{
+    height:calc(34px + max(env(safe-area-inset-top, 0px), 24px));
+    padding-top:max(env(safe-area-inset-top, 0px), 24px);
+  }
+  html.is-android .mobile-menu-panel{
+    padding-top:max(env(safe-area-inset-top, 0px), 24px);
   }
 
   /* ===== TAB BAR ===== */
